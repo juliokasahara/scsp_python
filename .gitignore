@@ -1,0 +1,85 @@
+# ── Sistema Operacional ───────────────────────────────────────────────────── #
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ── Editores / IDEs ───────────────────────────────────────────────────────── #
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+
+# ── Python ────────────────────────────────────────────────────────────────── #
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+.eggs/
+dist/
+build/
+*.spec
+*.exe
+*.app
+
+# ── Java / Maven ──────────────────────────────────────────────────────────── #
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+.mvn/wrapper/maven-wrapper.jar
+
+# ── Node / Angular ────────────────────────────────────────────────────────── #
+node_modules/
+dist/
+.angular/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ── Segredos / Credenciais ────────────────────────────────────────────────── #
+*.env
+.env
+.env.*
+*_password.txt
+*_secret.txt
+*_key.txt
+*.pem
+*.p12
+*.pfx
+*.jks
+
+# ── Logs ──────────────────────────────────────────────────────────────────── #
+*.log
+logs/
+
+# ── Banco de Dados / Dumps ────────────────────────────────────────────────── #
+*.sql
+*.sqlite
+*.db
+
+# ── Docker ────────────────────────────────────────────────────────────────── #
+.dockerignore
+
+# ── Temporários do projeto ────────────────────────────────────────────────── #
+tmpclaude-*/
