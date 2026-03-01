@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QListWidget, QListWidgetItem, QProgressBar, QFileDialog,
     QMessageBox, QFrame, QWidget, QTabWidget, QSizePolicy, QListView,
+    QSplitter, QTreeWidget, QTreeWidgetItem,
 )
 
 try:
@@ -259,11 +260,12 @@ class _CloudTab(QWidget):
     def __init__(self, usuario=None, parent=None):
         super().__init__(parent)
         self._usuario           = usuario
-        self._objects           = []
+        self._objects           = []   # lista completa do backend
         self._list_worker       = None
         self._download_worker   = None
         self._thumb_workers     = []
-        self._key_to_row        = {}   # key → índice na lista
+        self._key_to_pixmap     = {}   # key → QPixmap (cache em memória)
+        self._current_prefix    = None # None = todos; str = prefixo de pasta
         self._build_ui()
 
     def _build_ui(self):
@@ -271,20 +273,34 @@ class _CloudTab(QWidget):
         lay.setContentsMargins(8, 8, 8, 8)
         lay.setSpacing(6)
 
+        # ── barra superior ─────────────────────────────────────────────── #
         top = QHBoxLayout()
         self.lbl_status = QLabel("Clique em 🔄 para listar os vídeos do servidor.")
         self.lbl_status.setWordWrap(True)
         self.lbl_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
         self.btn_refresh = QPushButton("🔄 Atualizar")
         self.btn_refresh.setFixedWidth(110)
         self.btn_refresh.clicked.connect(self._load_list)
-
         top.addWidget(self.lbl_status, 1)
         top.addWidget(self.btn_refresh)
         lay.addLayout(top)
 
-        # ── lista em modo grade com thumbnails ────────────────────────── #
+        # ── splitter: árvore de pastas | grade de thumbnails ───────────── #
+        splitter = QSplitter(Qt.Horizontal)
+
+        # árvore de pastas (esquerda)
+        self.tree = QTreeWidget()
+        self.tree.setHeaderHidden(True)
+        self.tree.setMinimumWidth(140)
+        self.tree.setMaximumWidth(260)
+        self.tree.setStyleSheet(
+            "QTreeWidget { font-size: 12px; } "
+            "QTreeWidget::item { padding: 4px 2px; }"
+        )
+        self.tree.currentItemChanged.connect(self._on_tree_selection)
+        splitter.addWidget(self.tree)
+
+        # grade de thumbnails (direita)
         self.list_widget = QListWidget()
         self.list_widget.setViewMode(QListView.IconMode)
         self.list_widget.setIconSize(QSize(_THUMB_W, _THUMB_H))
@@ -295,8 +311,13 @@ class _CloudTab(QWidget):
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideMiddle)
         self.list_widget.itemDoubleClicked.connect(self._on_double_click)
-        lay.addWidget(self.list_widget, 1)
+        splitter.addWidget(self.list_widget)
 
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        lay.addWidget(splitter, 1)
+
+        # ── rodapé ────────────────────────────────────────────────────── #
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -331,21 +352,93 @@ class _CloudTab(QWidget):
         self._list_worker.start()
 
     def _on_list_done(self, objects):
-        self._objects    = objects
-        self._key_to_row = {}
+        self._objects = objects
+        self._key_to_pixmap = {}
         self.btn_refresh.setEnabled(True)
 
         if not objects:
             self.lbl_status.setText("Nenhum vídeo encontrado no servidor.")
+            self.tree.clear()
+            self.list_widget.clear()
             return
 
         self.lbl_status.setText(
             f"✅  {len(objects)} vídeo(s) disponível(eis). Duplo-clique para baixar."
         )
 
-        default_icon = _default_icon()
+        # ── constrói árvore de pastas ──────────────────────────────────── #
+        self.tree.clear()
+        folder_nodes = {}  # prefixo → QTreeWidgetItem
 
-        for row, obj in enumerate(objects):
+        # item raiz: Todos os vídeos
+        root_item = QTreeWidgetItem([f"☁️  Todos  ({len(objects)})"])
+        root_item.setData(0, Qt.UserRole, None)  # None = sem filtro
+        self.tree.addTopLevelItem(root_item)
+
+        for obj in objects:
+            key   = obj["key"]
+            parts = key.split("/")
+            # partes até o penúltimo elemento são pastas
+            current_path = ""
+            parent_node  = root_item
+            for folder in parts[:-1]:
+                current_path = f"{current_path}/{folder}" if current_path else folder
+                if current_path not in folder_nodes:
+                    node = QTreeWidgetItem([f"📁  {folder}"])
+                    node.setData(0, Qt.UserRole, current_path)
+                    parent_node.addChild(node)
+                    folder_nodes[current_path] = node
+                parent_node = folder_nodes[current_path]
+
+        self.tree.expandAll()
+        # atualiza contadores nas pastas
+        self._update_folder_counts(folder_nodes)
+
+        # seleciona raiz (mostra todos)
+        self.tree.setCurrentItem(root_item)
+
+        # dispara thumbnails para todos os objetos
+        for obj in objects:
+            self._request_thumbnail(obj["key"])
+
+    def _update_folder_counts(self, folder_nodes: dict):
+        """Atualiza o texto dos nós de pasta com contagem de vídeos."""
+        for prefix, node in folder_nodes.items():
+            count = sum(
+                1 for obj in self._objects
+                if obj["key"].startswith(prefix + "/")
+            )
+            folder = node.text(0).split("  ")[1].split("  (")[0]  # nome limpo
+            node.setText(0, f"📁  {folder}  ({count})")
+
+    def _on_list_error(self, msg):
+        self.btn_refresh.setEnabled(True)
+        self.lbl_status.setText(f"❌ Erro ao conectar: {msg}")
+
+    def _on_tree_selection(self, current, _previous):
+        """Filtra a grade ao selecionar uma pasta na árvore."""
+        if current is None:
+            return
+        prefix = current.data(0, Qt.UserRole)  # None = todos
+        self._populate_grid(prefix)
+
+    def _populate_grid(self, prefix):
+        """Preenche a grade com os vídeos do prefixo de pasta dado."""
+        self._current_prefix = prefix
+        self.list_widget.clear()
+        self.btn_open.setEnabled(False)
+
+        if not self._objects:
+            return
+
+        if prefix is None:
+            filtered = self._objects
+        else:
+            filtered = [obj for obj in self._objects
+                        if obj["key"].startswith(prefix + "/")]
+
+        default_icon = _default_icon()
+        for obj in filtered:
             key    = obj["key"]
             name   = os.path.basename(key)
             size   = _fmt_size(obj.get("size", 0))
@@ -357,9 +450,10 @@ class _CloudTab(QWidget):
                 dt_str = dt_raw[:16]
 
             cached = os.path.exists(_local_cache_path(key))
+            label  = f"{name}\n{size}  {dt_str}"
+            icon   = QIcon(self._key_to_pixmap[key]) if key in self._key_to_pixmap else default_icon
 
-            label = f"{name}\n{size}  {dt_str}"
-            item  = QListWidgetItem(default_icon, label)
+            item = QListWidgetItem(icon, label)
             item.setData(Qt.UserRole, obj)
             item.setTextAlignment(Qt.AlignHCenter | Qt.AlignTop)
             if cached:
@@ -368,29 +462,23 @@ class _CloudTab(QWidget):
             else:
                 item.setToolTip("☁️  Clique duplo para baixar e abrir.")
             self.list_widget.addItem(item)
-            self._key_to_row[key] = row
-
-            # dispara thumbnail para todos os itens (cache, local ou S3 parcial)
-            self._request_thumbnail(key)
-
-    def _on_list_error(self, msg):
-        self.btn_refresh.setEnabled(True)
-        self.lbl_status.setText(f"❌ Erro ao conectar: {msg}")
 
     def _request_thumbnail(self, key: str):
-        """Dispara worker de thumbnail (cache, local ou S3 parcial)."""
+        """Dispara worker de thumbnail (cache local, vídeo local ou backend)."""
         w = _ThumbnailWorker(key, self._usuario)
         w.ready.connect(self._apply_thumbnail)
         w.start()
         self._thumb_workers.append(w)
 
     def _apply_thumbnail(self, key: str, pixmap: QPixmap):
-        row = self._key_to_row.get(key)
-        if row is None:
-            return
-        item = self.list_widget.item(row)
-        if item:
-            item.setIcon(QIcon(pixmap))
+        """Armazena o pixmap em memória e atualiza todos os itens visíveis."""
+        self._key_to_pixmap[key] = pixmap
+        icon = QIcon(pixmap)
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item and item.data(Qt.UserRole) and item.data(Qt.UserRole).get("key") == key:
+                item.setIcon(icon)
+                break
 
     # ── download ──────────────────────────────────────────────────────────── #
 
@@ -432,14 +520,16 @@ class _CloudTab(QWidget):
         self.lbl_download.setText("✅ Download concluído.")
         self.btn_open.setEnabled(True)
         self.btn_refresh.setEnabled(True)
-        # atualiza cor e gera thumbnail do vídeo recém-baixado
-        for key, row in self._key_to_row.items():
-            if _local_cache_path(key) == local_path:
-                item = self.list_widget.item(row)
-                if item:
-                    item.setForeground(Qt.darkGreen)
-                    item.setToolTip("💾 Já baixado — abre do cache local.")
-                self._request_thumbnail(key)
+        # atualiza cor do item na grade e regenera thumbnail
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item is None:
+                continue
+            obj = item.data(Qt.UserRole)
+            if obj and _local_cache_path(obj["key"]) == local_path:
+                item.setForeground(Qt.darkGreen)
+                item.setToolTip("💾 Já baixado — abre do cache local.")
+                self._request_thumbnail(obj["key"])
                 break
         self.video_ready.emit(local_path)
 
@@ -463,11 +553,21 @@ class S3VideoDialog(QDialog):
 
     def __init__(self, usuario=None, parent=None):
         super().__init__(parent)
+        # remove o botão "?" da barra de título
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setWindowTitle("Abrir Vídeo")
-        self.setMinimumSize(640, 480)
+        self.setMinimumSize(900, 600)
         self.selected_path: Optional[str] = None
         self._usuario = usuario
         self._build_ui()
+        # Abre com 80% da tela, respeitando o mínimo definido acima
+        if parent:
+            screen = parent.screen().availableGeometry()
+        else:
+            from PyQt5.QtWidgets import QApplication
+            screen = QApplication.primaryScreen().availableGeometry()
+        self.resize(max(1100, int(screen.width() * 0.80)),
+                    max(680,  int(screen.height() * 0.80)))
 
     def _build_ui(self):
         lay = QVBoxLayout(self)

@@ -1,3 +1,4 @@
+import os
 import sys
 import cv2
 from PyQt5.QtWidgets import (
@@ -7,7 +8,7 @@ from PyQt5.QtWidgets import (
     QMenu, QAction, QActionGroup, QGraphicsPixmapItem, QMessageBox,
 )
 from PyQt5.QtCore import Qt, QTime, QPoint, QObject, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QPen, QColor, QImage, QPixmap
+from PyQt5.QtGui import QPen, QColor, QImage, QPixmap, QIcon
 from PyQt5.QtWidgets import QGraphicsLineItem
 
 # ── Autenticação ──────────────────────────────────────────────────────────── #
@@ -303,6 +304,9 @@ class DualVideoPlayer(QWidget):
         super().__init__()
         self._usuario = usuario
         self.setWindowTitle(self._montar_titulo())
+        _ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_icon.png")
+        if os.path.exists(_ico):
+            self.setWindowIcon(QIcon(_ico))
         self.lbl_user = None  # será criado em _build_ui()
 
         # ── Heartbeat ──────────────────────────────────────────────────── #
@@ -769,7 +773,18 @@ class DualVideoPlayer(QWidget):
             self.is_vertical_layout = True
 
 if __name__ == "__main__":
+    # Define AppUserModelID para o Windows mostrar o ícone correto na taskbar
+    # (sem isso o Windows agrupa sob o ícone do python.exe)
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("scsp.dual_player")
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
+    _app_ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_icon.png")
+    if os.path.exists(_app_ico):
+        app.setWindowIcon(QIcon(_app_ico))
 
     # ── Tela de login ──────────────────────────────────────────────────── #
     usuario_autenticado = None
