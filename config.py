@@ -40,3 +40,34 @@ S3_CACHE_DIR = _os.path.join(_os.path.expanduser("~"), ".lastpoint", "videos")
 
 # Pasta local onde os thumbnails gerados ficam em cache
 S3_THUMB_DIR = _os.path.join(_os.path.expanduser("~"), ".lastpoint", "thumbs")
+
+# ==============================================================
+# Google OAuth2 — Login com Google
+# Lê de variável de ambiente; fallback para o arquivo usado pelo
+# backend Java (scsp-java/google_secret.txt) ou valor padrão vazio.
+#
+# Para configurar:
+#   Opção 1 (recomendada): defina variáveis de ambiente antes de rodar
+#     set GOOGLE_CLIENT_ID=566842041415-...apps.googleusercontent.com
+#     set GOOGLE_CLIENT_SECRET=GOCSPX-...
+#   Opção 2: o arquivo scsp-java/google_secret.txt já contém o secret.
+# ==============================================================
+def _read_file_secret(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+_JAVA_ROOT = _os.path.join(_os.path.dirname(__file__), "..", "scsp-java")
+
+GOOGLE_CLIENT_ID = _os.environ.get(
+    "GOOGLE_CLIENT_ID",
+    "566842041415-nvmk4ll352svs9sc1gflvphva9hddegb.apps.googleusercontent.com",
+)
+
+GOOGLE_CLIENT_SECRET = (
+    _os.environ.get("GOOGLE_CLIENT_SECRET")
+    or _read_file_secret(_os.path.join(_JAVA_ROOT, "google_secret.txt"))
+    or ""  # falha explícita em runtime se vazio
+)

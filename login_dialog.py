@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QWidget, QFrame,
 )
 
-from auth import login, UsuarioAutenticado, AuthError, SemPlanoError
+from auth import login, login_google, UsuarioAutenticado, AuthError, SemPlanoError
 
 
 # --------------------------------------------------------------------------- #
@@ -33,6 +33,25 @@ class _LoginWorker(QThread):
     def run(self):
         try:
             usuario = login(self.email.strip(), self.senha)
+            self.sucesso.emit(usuario)
+        except SemPlanoError as exc:
+            self.erro.emit(str(exc), True)
+        except AuthError as exc:
+            self.erro.emit(str(exc), False)
+        except Exception as exc:
+            self.erro.emit(f"Erro inesperado: {exc}", False)
+
+
+# --------------------------------------------------------------------------- #
+#  Worker Google
+# --------------------------------------------------------------------------- #
+class _GoogleLoginWorker(QThread):
+    sucesso = pyqtSignal(object)    # UsuarioAutenticado
+    erro    = pyqtSignal(str, bool) # mensagem, é_sem_credito
+
+    def run(self):
+        try:
+            usuario = login_google()
             self.sucesso.emit(usuario)
         except SemPlanoError as exc:
             self.erro.emit(str(exc), True)
@@ -95,6 +114,25 @@ class LoginDialog(QDialog):
             background-color: #555;
             color: #999;
         }
+        QPushButton#btn_google {
+            background-color: #ffffff;
+            color: #444;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        QPushButton#btn_google:hover {
+            background-color: #f5f5f5;
+            border-color: #4285F4;
+            color: #4285F4;
+        }
+        QPushButton#btn_google:disabled {
+            background-color: #555;
+            color: #999;
+            border-color: #555;
+        }
         QCheckBox {
             color: #888;
             font-size: 12px;
@@ -117,7 +155,7 @@ class LoginDialog(QDialog):
     # ── UI ──────────────────────────────────────────────────────────────── #
     def _setup_ui(self):
         self.setWindowTitle("LASTPOINT — Login")
-        self.setFixedSize(380, 480)
+        self.setFixedSize(380, 580)
         self.setStyleSheet(self._STYLE)
         self.setWindowFlags(Qt.Dialog | Qt.WindowCloseButtonHint)
 
@@ -183,6 +221,23 @@ class LoginDialog(QDialog):
 
         root.addSpacing(16)
 
+        # Separador
+        sep = QFrame()
+        sep.setObjectName("separator")
+        sep.setFrameShape(QFrame.HLine)
+        root.addWidget(sep)
+
+        root.addSpacing(12)
+
+        # Botão Google
+        self.btn_google = QPushButton("  Entrar com Google")
+        self.btn_google.setObjectName("btn_google")
+        self.btn_google.setCursor(Qt.PointingHandCursor)
+        self.btn_google.clicked.connect(self._tentar_login_google)
+        root.addWidget(self.btn_google)
+
+        root.addSpacing(16)
+
         # Label de status / erro
         self.lbl_status = QLabel("")
         self.lbl_status.setObjectName("creditos")
@@ -233,8 +288,17 @@ class LoginDialog(QDialog):
                 mensagem + "\n\nEntre em contato com o administrador.",
             )
 
+    def _tentar_login_google(self):
+        self._set_carregando(True)
+        self.lbl_status.setText("Abrindo browser para login Google…")
+        self._worker = _GoogleLoginWorker()
+        self._worker.sucesso.connect(self._on_sucesso)
+        self._worker.erro.connect(self._on_erro)
+        self._worker.start()
+
     def _set_carregando(self, carregando: bool):
         self.btn_login.setEnabled(not carregando)
+        self.btn_google.setEnabled(not carregando)
         self.input_email.setEnabled(not carregando)
         self.input_senha.setEnabled(not carregando)
         self.btn_login.setText("Aguarde…" if carregando else "Entrar")
