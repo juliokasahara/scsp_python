@@ -23,6 +23,12 @@ try:
 except ImportError:
     _AUTH_DISPONIVEL = False
 
+try:
+    from s3_video_dialog import S3VideoDialog
+    _S3_DIALOG_DISPONIVEL = True
+except ImportError:
+    _S3_DIALOG_DISPONIVEL = False
+
 _HEARTBEAT_INTERVALO_MS  = 5 * 60 * 1000   # verifica a cada 5 minutos
 _HEARTBEAT_FALHAS_LIMITE = 3               # fecha após 3 erros de rede consecutivos
 
@@ -417,7 +423,7 @@ class DualVideoPlayer(QWidget):
         controls1 = QHBoxLayout(); controls1.setSpacing(5); controls1.setContentsMargins(0, 0, 0, 0)
         for w in (btn_open1, btn_play1, btn_frameprev1, btn_frame1, btn_rotate1, btn_mute1, btn_zoom_in1, btn_zoom_out1): controls1.addWidget(w)
 
-        btn_open2 = QPushButton("🎦"); btn_open2.clicked.connect(lambda: self.open_file(self.player2))
+        btn_open2 = QPushButton("🎦"); btn_open2.clicked.connect(lambda: self.open_file_s3(self.player2))
         btn_play2 = QPushButton("⏯️"); btn_play2.setCheckable(True); btn_play2.clicked.connect(lambda c: self.toggle_play(self.player2, btn_play2, c))
         btn_rotate2 = QPushButton("🔄"); btn_rotate2.clicked.connect(lambda: self.rotate_video(self.video_item2))
         btn_mute2 = QPushButton("🔊"); btn_mute2.setCheckable(True); btn_mute2.setChecked(True); btn_mute2.clicked.connect(lambda c: self.toggle_mute(self.player2, btn_mute2, c))
@@ -549,8 +555,8 @@ class DualVideoPlayer(QWidget):
         self.player2.pause()
         super().closeEvent(event)
 
-    def open_file(self, player):
-        # ── Verificar limite diário (local, sem nova chamada de rede) ────────── #
+    def _verificar_limite(self) -> bool:
+        """Verifica e exibe aviso se o limite diário foi atingido. Retorna False se bloqueado."""
         if self._usuario and _AUTH_DISPONIVEL:
             if not pode_abrir(self._usuario):
                 limite = self._usuario.limite_diario
@@ -561,16 +567,14 @@ class DualVideoPlayer(QWidget):
                     f"Plano: {self._usuario.plano_label}\n\n"
                     "O contador é zerado à meia-noite pelo servidor.",
                 )
-                return
+                return False
+        return True
 
-        path, _ = QFileDialog.getOpenFileName(self, "Selecione um vídeo")
-        if not path:
-            return
-
-        # ── Registrar abertura no backend ───────────────────────────────── #
+    def _registrar_e_abrir(self, player, path: str):
+        """Registra abertura no backend e carrega o vídeo no player."""
         if self._usuario and _AUTH_DISPONIVEL:
             try:
-                registrar_abertura(self._usuario)  # atualiza restante_hoje no objeto
+                registrar_abertura(self._usuario)
             except LimiteAcessoError as exc:
                 QMessageBox.warning(self, "Limite diário atingido", str(exc))
                 return
@@ -580,10 +584,33 @@ class DualVideoPlayer(QWidget):
                     f"Não foi possível registrar abertura no servidor:\n{exc}\n\n"
                     "O vídeo será aberto assim mesmo."
                 )
-
         player.setMedia(path)
         if self._usuario and _AUTH_DISPONIVEL:
             self._atualizar_info_usuario()
+
+    def open_file(self, player):
+        """Abre arquivo local (comportamento original — usado pelo player 1)."""
+        if not self._verificar_limite():
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Selecione um vídeo", "",
+            "Vídeos (*.mp4 *.avi *.mov *.mkv *.webm *.flv *.wmv *.m4v);;Todos os arquivos (*)"
+        )
+        if not path:
+            return
+        self._registrar_e_abrir(player, path)
+
+    def open_file_s3(self, player):
+        """Abre modal com opção de arquivo local ou vídeo do MinIO S3."""
+        if not self._verificar_limite():
+            return
+        if not _S3_DIALOG_DISPONIVEL:
+            # fallback para diálogo local se s3_video_dialog não carregar
+            self.open_file(player)
+            return
+        dlg = S3VideoDialog(usuario=self._usuario, parent=self)
+        if dlg.exec_() == S3VideoDialog.Accepted and dlg.selected_path:
+            self._registrar_e_abrir(player, dlg.selected_path)
 
     def toggle_play(self, player, button, checked):
         if checked: player.play(); button.setText("⏯️")

@@ -27,3 +27,16 @@ OAUTH_CLIENT_SECRET = "@321"  # JWT_PASSWORD do .env
 # Para ativar um plano para um usuário, use o endpoint admin:
 #   POST /api/movimento-acesso/admin/ativar-plano
 # ==============================================================
+
+# ==============================================================
+# MinIO / S3 — pasta de cache local para vídeos baixados
+# As credenciais S3 ficam SOMENTE no servidor Java.
+# O cliente Python usa apenas a API autenticada (JWT).
+# ==============================================================
+import os as _os
+
+# Pasta local onde os vídeos baixados ficam em cache
+S3_CACHE_DIR = _os.path.join(_os.path.expanduser("~"), ".lastpoint", "videos")
+
+# Pasta local onde os thumbnails gerados ficam em cache
+S3_THUMB_DIR = _os.path.join(_os.path.expanduser("~"), ".lastpoint", "thumbs")
