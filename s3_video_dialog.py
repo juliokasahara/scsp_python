@@ -21,9 +21,9 @@ from typing import Optional
 import cv2
 import requests
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
-from PyQt5.QtGui import QPixmap, QImage, QIcon, QColor
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QThread, Signal, QSize
+from PySide6.QtGui import QPixmap, QImage, QIcon, QColor
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QListWidget, QListWidgetItem, QProgressBar, QFileDialog,
     QMessageBox, QFrame, QWidget, QTabWidget, QSizePolicy, QListView,
@@ -105,7 +105,7 @@ def _extract_frame_from_file(path: str):
 #                                     presigned URL — nunca baixa vídeo inteiro)
 
 class _ThumbnailWorker(QThread):
-    ready = pyqtSignal(str, QPixmap)  # key, pixmap
+    ready = Signal(str, QPixmap)  # key, pixmap
 
     def __init__(self, key: str, usuario):
         super().__init__()
@@ -185,8 +185,8 @@ class _ThumbnailWorker(QThread):
 # ── Worker: lista vídeos via backend ─────────────────────────────────────── #
 
 class _ListWorker(QThread):
-    done  = pyqtSignal(list)
-    error = pyqtSignal(str)
+    done  = Signal(list)
+    error = Signal(str)
 
     def __init__(self, usuario):
         super().__init__()
@@ -208,9 +208,9 @@ class _ListWorker(QThread):
 # ── Worker: obtém presigned URL e faz o download ─────────────────────────── #
 
 class _DownloadWorker(QThread):
-    progress = pyqtSignal(int)   # 0–100
-    done     = pyqtSignal(str)   # caminho local
-    error    = pyqtSignal(str)
+    progress = Signal(int)   # 0–100
+    done     = Signal(str)   # caminho local
+    error    = Signal(str)
 
     def __init__(self, key: str, local_path: str, usuario):
         super().__init__()
@@ -255,7 +255,7 @@ class _DownloadWorker(QThread):
 # ── Aba Nuvem ─────────────────────────────────────────────────────────────── #
 
 class _CloudTab(QWidget):
-    video_ready = pyqtSignal(str)
+    video_ready = Signal(str)
 
     def __init__(self, usuario=None, parent=None):
         super().__init__(parent)
@@ -302,11 +302,11 @@ class _CloudTab(QWidget):
 
         # grade de thumbnails (direita)
         self.list_widget = QListWidget()
-        self.list_widget.setViewMode(QListView.IconMode)
+        self.list_widget.setViewMode(QListView.ViewMode.IconMode)
         self.list_widget.setIconSize(QSize(_THUMB_W, _THUMB_H))
         self.list_widget.setGridSize(QSize(_THUMB_W + 20, _THUMB_H + 44))
-        self.list_widget.setResizeMode(QListView.Adjust)
-        self.list_widget.setMovement(QListView.Static)
+        self.list_widget.setResizeMode(QListView.ResizeMode.Adjust)
+        self.list_widget.setMovement(QListView.Movement.Static)
         self.list_widget.setSpacing(8)
         self.list_widget.setWordWrap(True)
         self.list_widget.setTextElideMode(Qt.ElideMiddle)
@@ -564,7 +564,7 @@ class S3VideoDialog(QDialog):
         if parent:
             screen = parent.screen().availableGeometry()
         else:
-            from PyQt5.QtWidgets import QApplication
+            from PySide6.QtWidgets import QApplication
             screen = QApplication.primaryScreen().availableGeometry()
         self.resize(max(1100, int(screen.width() * 0.80)),
                     max(680,  int(screen.height() * 0.80)))

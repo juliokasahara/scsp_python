@@ -1,15 +1,15 @@
 import os
 import sys
 import cv2
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QWidget, QPushButton,
     QHBoxLayout, QVBoxLayout, QFileDialog,
     QSlider, QLabel, QSizePolicy, QGraphicsView, QGraphicsScene, QFrame,
-    QMenu, QAction, QActionGroup, QGraphicsPixmapItem, QMessageBox,
+    QMenu, QGraphicsPixmapItem, QMessageBox, QBoxLayout,
 )
-from PyQt5.QtCore import Qt, QTime, QPoint, QObject, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QPen, QColor, QImage, QPixmap, QIcon
-from PyQt5.QtWidgets import QGraphicsLineItem
+from PySide6.QtCore import Qt, QTime, QPoint, QObject, QTimer, QThread, Signal
+from PySide6.QtGui import QPen, QColor, QImage, QPixmap, QIcon, QAction, QActionGroup
+from PySide6.QtWidgets import QGraphicsLineItem
 
 # ── Autenticação ──────────────────────────────────────────────────────────── #
 try:
@@ -37,9 +37,9 @@ _HEARTBEAT_FALHAS_LIMITE = 3               # fecha após 3 erros de rede consecu
 # ── Worker de heartbeat ───────────────────────────────────────────────────── #
 class _HeartbeatWorker(QThread):
     """Verifica em background se o plano do usuário ainda está ativo."""
-    ok           = pyqtSignal(object)  # dict MovimentoAcessoDTO atualizado
-    falha_plano  = pyqtSignal(str)     # plano inativo/expirado → fechar app
-    falha_rede   = pyqtSignal()        # erro de rede → contar tentativa
+    ok           = Signal(object)  # dict MovimentoAcessoDTO atualizado
+    falha_plano  = Signal(str)     # plano inativo/expirado → fechar app
+    falha_rede   = Signal()        # erro de rede → contar tentativa
 
     def __init__(self, usuario):
         super().__init__()
@@ -57,8 +57,8 @@ class _HeartbeatWorker(QThread):
 
 class CVVideoPlayer(QObject):
     """Backend de reprodução de vídeo usando OpenCV — sem dependência de DirectShow."""
-    positionChanged = pyqtSignal(int)
-    durationChanged = pyqtSignal(int)
+    positionChanged = Signal(int)
+    durationChanged = Signal(int)
 
     def __init__(self, pixmap_item):
         super().__init__()
@@ -613,7 +613,7 @@ class DualVideoPlayer(QWidget):
             self.open_file(player)
             return
         dlg = S3VideoDialog(usuario=self._usuario, parent=self)
-        if dlg.exec_() == S3VideoDialog.Accepted and dlg.selected_path:
+        if dlg.exec() == S3VideoDialog.DialogCode.Accepted and dlg.selected_path:
             self._registrar_e_abrir(player, dlg.selected_path)
 
     def toggle_play(self, player, button, checked):
@@ -760,13 +760,13 @@ class DualVideoPlayer(QWidget):
                 child.layout().setParent(None)
         
         if self.is_vertical_layout:
-            self.players_layout.setDirection(QHBoxLayout.LeftToRight)
+            self.players_layout.setDirection(QBoxLayout.Direction.LeftToRight)
             self.players_layout.addLayout(self.layout1, 1)
             self.players_layout.addLayout(self.layout2, 1)
             self.btn_layout_toggle.setText("📱")
             self.is_vertical_layout = False
         else:
-            self.players_layout.setDirection(QVBoxLayout.TopToBottom)
+            self.players_layout.setDirection(QBoxLayout.Direction.TopToBottom)
             self.players_layout.addLayout(self.layout1, 1)
             self.players_layout.addLayout(self.layout2, 1)
             self.btn_layout_toggle.setText("📺")
@@ -791,7 +791,7 @@ if __name__ == "__main__":
     if _AUTH_DISPONIVEL:
         dlg = LoginDialog()
         resultado = dlg.exec_()
-        if resultado != LoginDialog.Accepted or dlg.usuario is None:
+        if resultado != LoginDialog.DialogCode.Accepted or dlg.usuario is None:
             # Usuário fechou ou não autenticou — encerra o app
             sys.exit(0)
         usuario_autenticado = dlg.usuario
@@ -807,4 +807,4 @@ if __name__ == "__main__":
     # ── Janela principal ───────────────────────────────────────────────── #
     player = DualVideoPlayer(usuario=usuario_autenticado)
     player.showMaximized()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

@@ -1,15 +1,15 @@
 """
 login_dialog.py — Janela de login para o SCSP Video Analyst
 
-Usa PyQt5 e chama auth.login() para autenticar no backend Java.
+Usa PySide6 e chama auth.login() para autenticar no backend Java.
 """
 
 import threading
 from typing import Optional
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QPixmap, QIcon
-from PyQt5.QtWidgets import (
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QFont, QPixmap, QIcon
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QCheckBox, QMessageBox,
     QSizePolicy, QWidget, QFrame,
@@ -22,8 +22,8 @@ from auth import login, login_google, UsuarioAutenticado, AuthError, SemPlanoErr
 #  Worker: faz o login em thread separada para não travar a UI
 # --------------------------------------------------------------------------- #
 class _LoginWorker(QThread):
-    sucesso = pyqtSignal(object)   # UsuarioAutenticado
-    erro    = pyqtSignal(str, bool)  # mensagem, é_sem_credito
+    sucesso = Signal(object)   # UsuarioAutenticado
+    erro    = Signal(str, bool)  # mensagem, é_sem_credito
 
     def __init__(self, email: str, senha: str):
         super().__init__()
@@ -46,8 +46,8 @@ class _LoginWorker(QThread):
 #  Worker Google
 # --------------------------------------------------------------------------- #
 class _GoogleLoginWorker(QThread):
-    sucesso = pyqtSignal(object)    # UsuarioAutenticado
-    erro    = pyqtSignal(str, bool) # mensagem, é_sem_credito
+    sucesso = Signal(object)    # UsuarioAutenticado
+    erro    = Signal(str, bool) # mensagem, é_sem_credito
 
     def run(self):
         try:
