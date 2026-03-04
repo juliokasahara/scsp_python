@@ -63,7 +63,7 @@ _JAVA_ROOT = _os.path.join(_os.path.dirname(__file__), "..", "scsp-java")
 
 GOOGLE_CLIENT_ID = _os.environ.get(
     "GOOGLE_CLIENT_ID",
-    "566842041415-nvmk4ll352svs9sc1gflvphva9hddegb.apps.googleusercontent.com",
+    "533463923720-u91prmrd2ejkbncc2v159pad6s4vrfv4.apps.googleusercontent.com",
 )
 
 GOOGLE_CLIENT_SECRET = (
